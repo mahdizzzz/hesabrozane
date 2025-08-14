@@ -139,6 +139,7 @@
             
             <header class="text-center mb-8">
                 <h1 class="text-3xl md:text-4xl font-bold text-gray-800">مدیریت مالی شخصی</h1>
+                <p id="current-date" class="text-sm text-gray-500 mt-2"></p>
                 <p class="text-gray-500 mt-2">درآمد و هزینه‌های خود را به سادگی ثبت و تحلیل کنید.</p>
             </header>
 
@@ -296,6 +297,7 @@
                 const exportBtn = document.getElementById('export-btn');
                 const importBtn = document.getElementById('import-btn');
                 const importFileInput = document.getElementById('import-file-input');
+                const currentDateEl = document.getElementById('current-date');
                 
                 // Installment Elements
                 const installmentsList = document.getElementById('installments-list');
@@ -693,6 +695,7 @@
 
                 // --- INITIALIZATION ---
                 const init = () => {
+                    currentDateEl.textContent = `امروز: ${new Date().toLocaleDateString('fa-IR')}`;
                     datePickerEl.value = getTodayDateString();
 
                     transactionForm.addEventListener('submit', handleFormSubmit);
