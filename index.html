@@ -36,6 +36,8 @@
         .btn-primary:hover { background-color: #2563eb; }
         .btn-secondary { background-color: #6b7280; color: white; }
         .btn-secondary:hover { background-color: #4b5563; }
+        .btn-success { background-color: #22c55e; color: white; }
+        .btn-success:hover { background-color: #16a34a; }
         .btn-danger { background-color: #ef4444; color: white; }
         .btn-danger:hover { background-color: #dc2626; }
         .btn-edit { background-color: #f97316; color: white; }
@@ -213,10 +215,13 @@
                     <!-- Import/Export Card -->
                     <div class="card">
                         <h2 class="text-xl font-bold mb-4 border-b pb-2">مدیریت داده‌ها</h2>
-                        <div class="flex flex-col sm:flex-row gap-4">
-                            <button id="export-btn" class="btn btn-primary w-full">خروجی گرفتن (JSON)</button>
-                            <button id="import-btn" class="btn btn-secondary w-full">ورود داده‌ها (JSON)</button>
-                            <input type="file" id="import-file-input" class="hidden" accept=".json">
+                        <div class="space-y-3">
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <button id="export-json-btn" class="btn btn-primary w-full">خروجی (JSON)</button>
+                                <button id="import-btn" class="btn btn-secondary w-full">ورود داده (JSON)</button>
+                                <input type="file" id="import-file-input" class="hidden" accept=".json">
+                            </div>
+                             <button id="export-html-btn" class="btn btn-success w-full">خروجی (گزارش)</button>
                         </div>
                     </div>
                 </div>
@@ -294,7 +299,8 @@
                 const cancelBtn = document.getElementById('cancel-btn');
                 const summaryDateDisplay = document.getElementById('summary-date-display');
                 const recordedDaysList = document.getElementById('recorded-days-list');
-                const exportBtn = document.getElementById('export-btn');
+                const exportJsonBtn = document.getElementById('export-json-btn');
+                const exportHtmlBtn = document.getElementById('export-html-btn');
                 const importBtn = document.getElementById('import-btn');
                 const importFileInput = document.getElementById('import-file-input');
                 const currentDateEl = document.getElementById('current-date');
@@ -332,6 +338,10 @@
                     const [year, month, day] = dateStr.split('-').map(Number);
                     return new Date(year, month - 1, day).toLocaleDateString('en-US', options);
                 };
+
+                const formatPersianDate = (date, options = { year: 'numeric', month: 'long', day: 'numeric' }) => {
+                    return date.toLocaleDateString('fa-IR', options);
+                }
                 
                 const getTodayDateString = () => {
                     const today = new Date();
@@ -343,7 +353,6 @@
 
                 const getPersianDay = () => {
                     const today = new Date();
-                    // 'fa-IR-u-nu-latn' ensures the numbers are standard Latin numerals for easy parsing.
                     const persianDate = today.toLocaleDateString('fa-IR-u-nu-latn');
                     return parseInt(persianDate.split('/')[2], 10);
                 };
@@ -362,7 +371,6 @@
                         const li = document.createElement('li');
                         li.className = 'flex justify-between items-center p-2 rounded-md hover:bg-gray-50';
                         
-                        // Check if the installment is due soon
                         const isDueSoon = currentDay >= (inst.day - 5) && currentDay <= inst.day;
                         const dueClass = isDueSoon ? 'due-soon' : '';
 
@@ -377,7 +385,6 @@
                         installmentsList.appendChild(li);
                     });
 
-                    // Add event listeners to delete buttons
                     document.querySelectorAll('.delete-installment-btn').forEach(button => {
                         button.addEventListener('click', (e) => {
                             const idToDelete = parseInt(e.target.dataset.id, 10);
@@ -394,10 +401,7 @@
                     renderInstallments();
                 }
 
-                addInstallmentBtn.addEventListener('click', () => {
-                    installmentModal.classList.remove('hidden');
-                });
-
+                addInstallmentBtn.addEventListener('click', () => installmentModal.classList.remove('hidden'));
                 cancelInstallmentBtn.addEventListener('click', () => {
                     installmentModal.classList.add('hidden');
                     installmentForm.reset();
@@ -646,7 +650,7 @@
                 };
 
                 // --- IMPORT/EXPORT LOGIC ---
-                const handleExport = () => {
+                const handleJsonExport = () => {
                     if (transactions.length === 0) {
                         alert('داده‌ای برای خروجی گرفتن وجود ندارد.');
                         return;
@@ -662,6 +666,166 @@
                     document.body.removeChild(link);
                     URL.revokeObjectURL(url);
                 };
+
+                const handleHtmlExport = () => {
+                    if (transactions.length === 0) {
+                        alert('داده‌ای برای خروجی گرفتن وجود ندارد.');
+                        return;
+                    }
+
+                    // 1. Prepare data for the report
+                    const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+                    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+                    const netProfit = totalIncome - totalExpense;
+
+                    // Expense by category for pie chart
+                    const expenseByCategory = transactions
+                        .filter(t => t.type === 'expense')
+                        .reduce((acc, t) => {
+                            acc[t.category] = (acc[t.category] || 0) + t.amount;
+                            return acc;
+                        }, {});
+
+                    // Daily income/expense for the last 30 days
+                    const dailyData = {};
+                    for (let i = 29; i >= 0; i--) {
+                        const d = new Date();
+                        d.setDate(d.getDate() - i);
+                        const dateStr = d.toISOString().split('T')[0];
+                        dailyData[dateStr] = { income: 0, expense: 0, label: formatPersianDate(d, { month: 'short', day: 'numeric' }) };
+                    }
+                    transactions.forEach(t => {
+                        if (dailyData[t.date]) {
+                            dailyData[t.date][t.type] += t.amount;
+                        }
+                    });
+
+                    // 2. Create the HTML content as a string
+                    const reportHtml = `
+                        <!DOCTYPE html>
+                        <html lang="fa" dir="rtl">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>گزارش مالی</title>
+                            <script src="https://cdn.tailwindcss.com"><\/script>
+                            <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+                            <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
+                            <style>
+                                body { font-family: 'Vazirmatn', sans-serif; background-color: #f9fafb; }
+                                .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); padding: 1.5rem; }
+                                .income { color: #16a34a; }
+                                .expense { color: #dc2626; }
+                            </style>
+                        </head>
+                        <body class="p-4 md:p-8">
+                            <div class="max-w-4xl mx-auto">
+                                <header class="text-center mb-8">
+                                    <h1 class="text-3xl font-bold text-gray-800">گزارش مالی</h1>
+                                    <p class="text-gray-500 mt-2">تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}</p>
+                                </header>
+
+                                <!-- Summary Cards -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <div class="card text-center">
+                                        <h3 class="text-gray-500 font-semibold">کل درآمد</h3>
+                                        <p class="text-2xl font-bold income mt-2">${formatCurrency(totalIncome)}</p>
+                                    </div>
+                                    <div class="card text-center">
+                                        <h3 class="text-gray-500 font-semibold">کل هزینه</h3>
+                                        <p class="text-2xl font-bold expense mt-2">${formatCurrency(totalExpense)}</p>
+                                    </div>
+                                    <div class="card text-center">
+                                        <h3 class="text-gray-500 font-semibold">سود/زیان خالص</h3>
+                                        <p class="text-2xl font-bold ${netProfit >= 0 ? 'income' : 'expense'} mt-2">${formatCurrency(netProfit)}</p>
+                                    </div>
+                                </div>
+
+                                <!-- Charts -->
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                                    <div class="card">
+                                        <h2 class="text-xl font-bold mb-4 text-center">درآمد و هزینه (۳۰ روز گذشته)</h2>
+                                        <canvas id="barChart"></canvas>
+                                    </div>
+                                    <div class="card">
+                                        <h2 class="text-xl font-bold mb-4 text-center">دسته‌بندی هزینه‌ها</h2>
+                                        <canvas id="pieChart" style="max-height: 300px; margin: auto;"></canvas>
+                                    </div>
+                                </div>
+
+                                <!-- Transactions Table -->
+                                <div class="card">
+                                    <h2 class="text-xl font-bold mb-4">لیست کامل تراکنش‌ها</h2>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-sm text-left text-gray-500">
+                                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                                <tr>
+                                                    <th scope="col" class="px-6 py-3">تاریخ</th>
+                                                    <th scope="col" class="px-6 py-3">نوع</th>
+                                                    <th scope="col" class="px-6 py-3">دسته/شرح</th>
+                                                    <th scope="col" class="px-6 py-3 text-right">مبلغ</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => `
+                                                    <tr class="bg-white border-b">
+                                                        <td class="px-6 py-4">${new Date(t.date).toLocaleDateString('fa-IR')}</td>
+                                                        <td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs ${t.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${t.type === 'income' ? 'درآمد' : 'هزینه'}</span></td>
+                                                        <td class="px-6 py-4 font-medium text-gray-900">${t.description || t.category}</td>
+                                                        <td class="px-6 py-4 text-right font-semibold ${t.type === 'income' ? 'income' : 'expense'}">${formatCurrency(t.amount)}</td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <script>
+                                const formatCurrencyJS = (num) => new Intl.NumberFormat('fa-IR').format(num);
+
+                                // Bar Chart
+                                new Chart(document.getElementById('barChart'), {
+                                    type: 'bar',
+                                    data: {
+                                        labels: Object.values(${JSON.stringify(dailyData)}).map(d => d.label),
+                                        datasets: [
+                                            { label: 'درآمد', data: Object.values(${JSON.stringify(dailyData)}).map(d => d.income), backgroundColor: 'rgba(34, 197, 94, 0.7)', borderRadius: 4 },
+                                            { label: 'هزینه', data: Object.values(${JSON.stringify(dailyData)}).map(d => d.expense), backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 4 }
+                                        ]
+                                    },
+                                    options: { responsive: true, scales: { y: { ticks: { callback: (v) => formatCurrencyJS(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => formatCurrencyJS(c.raw) + ' تومان' } } } }
+                                });
+
+                                // Pie Chart
+                                new Chart(document.getElementById('pieChart'), {
+                                    type: 'pie',
+                                    data: {
+                                        labels: ${JSON.stringify(Object.keys(expenseByCategory))},
+                                        datasets: [{
+                                            data: ${JSON.stringify(Object.values(expenseByCategory))},
+                                            backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6']
+                                        }]
+                                    },
+                                    options: { responsive: true, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => c.label + ': ' + formatCurrencyJS(c.raw) + ' تومان' } } } }
+                                });
+                            <\/script>
+                        </body>
+                        </html>
+                    `;
+
+                    // 3. Create a Blob and trigger download
+                    const dataBlob = new Blob([reportHtml], { type: 'text/html' });
+                    const url = URL.createObjectURL(dataBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `financial_report_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}.html`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                };
+
 
                 const handleImport = (event) => {
                     const file = event.target.files[0];
@@ -709,7 +873,8 @@
                         }
                     });
                     
-                    exportBtn.addEventListener('click', handleExport);
+                    exportJsonBtn.addEventListener('click', handleJsonExport);
+                    exportHtmlBtn.addEventListener('click', handleHtmlExport);
                     importBtn.addEventListener('click', () => importFileInput.click());
                     importFileInput.addEventListener('change', handleImport);
                     
