@@ -481,14 +481,18 @@
                             const item = document.createElement('div');
                             const amountClass = t.type === 'income' ? 'income' : 'expense';
                             const sign = t.type === 'income' ? '+' : '-';
-                            const categoryHTML = t.category ? `<p class="text-sm text-gray-500">${t.category}</p>` : '';
                             const mainDescription = t.description || t.category;
+                            const subDescription = t.description && t.category ? `<p class="text-sm text-gray-500">${t.category}</p>` : '';
+                            const timeHTML = t.time ? `<span class="text-xs text-gray-400 mr-2 font-normal">(${t.time})</span>` : '';
 
                             item.className = `flex items-center p-3 rounded-lg ${t.type === 'income' ? 'bg-green-50' : 'bg-red-50'}`;
                             item.innerHTML = `
                                 <div class="flex-grow">
-                                    <p class="font-semibold text-gray-800">${mainDescription}</p>
-                                    ${t.description ? categoryHTML : ''}
+                                    <div class="flex items-baseline">
+                                        <p class="font-semibold text-gray-800">${mainDescription}</p>
+                                        ${timeHTML}
+                                    </div>
+                                    ${subDescription}
                                 </div>
                                 <div class="text-left ml-4">
                                     <p class="text-md ${amountClass} font-bold">${sign}${formatCurrency(t.amount)}</p>
@@ -611,13 +615,16 @@
                         const id = transactionIdInput.value;
                         const index = transactions.findIndex(t => t.id === id);
                         if (index > -1) {
-                            transactions[index] = { ...transactions[index], ...transactionData };
+                            // Keep original creation time and timestamp
+                            const originalTransaction = transactions[index];
+                            transactions[index] = { ...originalTransaction, ...transactionData };
                         }
                     } else {
                         transactions.push({
                             ...transactionData,
                             id: crypto.randomUUID(),
-                            createdAt: Date.now()
+                            createdAt: Date.now(),
+                            time: new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
                         });
                     }
                     
@@ -792,15 +799,17 @@
                                                     <th scope="col" class="px-6 py-3">تاریخ</th>
                                                     <th scope="col" class="px-6 py-3">نوع</th>
                                                     <th scope="col" class="px-6 py-3">دسته/شرح</th>
+                                                    <th scope="col" class="px-6 py-3">ساعت</th>
                                                     <th scope="col" class="px-6 py-3">مبلغ</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                ${transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => `
+                                                ${transactions.sort((a, b) => new Date(b.date) - new Date(a.date) || b.createdAt - a.createdAt).map(t => `
                                                     <tr class="bg-white border-b hover:bg-gray-50">
                                                         <td class="px-6 py-4">${new Date(t.date).toLocaleDateString('fa-IR')}</td>
                                                         <td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs font-semibold ${t.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${t.type === 'income' ? 'درآمد' : 'هزینه'}</span></td>
                                                         <td class="px-6 py-4 font-medium text-gray-900">${t.description || t.category}</td>
+                                                        <td class="px-6 py-4 text-gray-600">${t.time || '--'}</td>
                                                         <td class="px-6 py-4 font-semibold ${t.type === 'income' ? 'income' : 'expense'}">${formatCurrency(t.amount)}</td>
                                                     </tr>
                                                 `).join('')}
