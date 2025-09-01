@@ -154,9 +154,20 @@
                              <h2 class="text-xl font-bold">اقساط ماهانه</h2>
                              <button id="add-installment-btn" class="text-blue-600 hover:text-blue-800 text-sm font-semibold">افزودن قسط</button>
                         </div>
-                        <ul id="installments-list" class="space-y-2 text-sm">
+                        <ul id="installments-list" class="space-y-2 text-sm max-h-48 overflow-y-auto pr-1">
                            <!-- Installments will be rendered here -->
                         </ul>
+                        <!-- Installment Summary -->
+                        <div id="installment-summary" class="mt-4 pt-4 border-t text-sm space-y-2">
+                            <div class="flex justify-between font-semibold">
+                                <span>مجموع اقساط:</span>
+                                <span id="total-installments">۰ تومان</span>
+                            </div>
+                            <div class="flex justify-between text-gray-600">
+                                <span>میانگین روزانه:</span>
+                                <span id="daily-installments">۰ تومان</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card">
@@ -235,7 +246,7 @@
                     </div>
 
                     <div class="card">
-                        <h2 class="text-xl font-bold mb-4 border-b pb-2">تحلیل کلی (۷ روز گذشته)</h2>
+                        <h2 class="text-xl font-bold mb-4 border-b pb-2">تحلیل کلی (۱۴ روز گذشته)</h2>
                         <canvas id="myChart"></canvas>
                     </div>
                 </div>
@@ -311,6 +322,8 @@
                 const installmentModal = document.getElementById('installment-modal');
                 const installmentForm = document.getElementById('installment-form');
                 const cancelInstallmentBtn = document.getElementById('cancel-installment-btn');
+                const totalInstallmentsEl = document.getElementById('total-installments');
+                const dailyInstallmentsEl = document.getElementById('daily-installments');
 
                 // App State
                 let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
@@ -358,42 +371,49 @@
                 };
 
                 // --- INSTALLMENT LOGIC ---
+                function updateInstallmentSummary() {
+                    const totalAmount = installments.reduce((sum, inst) => sum + inst.amount, 0);
+                    const dailyAmount = totalAmount > 0 ? totalAmount / 30 : 0;
+                    totalInstallmentsEl.textContent = formatCurrency(totalAmount);
+                    dailyInstallmentsEl.textContent = formatCurrency(Math.round(dailyAmount));
+                }
+
                 function renderInstallments() {
                     installmentsList.innerHTML = '';
                     const currentDay = getPersianDay();
 
                     if (installments.length === 0) {
                         installmentsList.innerHTML = `<p class="text-gray-500 text-center text-xs">قسطی ثبت نشده است.</p>`;
-                        return;
-                    }
-                    
-                    installments.sort((a, b) => a.day - b.day).forEach(inst => {
-                        const li = document.createElement('li');
-                        li.className = 'flex justify-between items-center p-2 rounded-md hover:bg-gray-50';
-                        
-                        const isDueSoon = currentDay >= (inst.day - 5) && currentDay <= inst.day;
-                        const dueClass = isDueSoon ? 'due-soon' : '';
+                    } else {
+                        installments.sort((a, b) => a.day - b.day).forEach(inst => {
+                            const li = document.createElement('li');
+                            li.className = 'flex justify-between items-center p-2 rounded-md hover:bg-gray-50';
+                            
+                            const isDueSoon = currentDay >= (inst.day - 5) && currentDay <= inst.day;
+                            const dueClass = isDueSoon ? 'due-soon' : '';
 
-                        li.innerHTML = `
-                            <div class="flex-grow ${dueClass}">
-                                <span>${inst.name}</span>
-                                <span class="text-gray-500 text-xs">(هر ماه ${inst.day}م)</span>
-                            </div>
-                            <span class="font-semibold w-28 text-left ${dueClass}">${formatCurrency(inst.amount)}</span>
-                            <button class="delete-installment-btn text-red-400 hover:text-red-600 mr-2 text-xs" data-id="${inst.id}">حذف</button>
-                        `;
-                        installmentsList.appendChild(li);
-                    });
-
-                    document.querySelectorAll('.delete-installment-btn').forEach(button => {
-                        button.addEventListener('click', (e) => {
-                            const idToDelete = parseInt(e.target.dataset.id, 10);
-                            if (confirm('آیا از حذف این قسط مطمئن هستید؟')) {
-                                installments = installments.filter(inst => inst.id !== idToDelete);
-                                saveAndRenderInstallments();
-                            }
+                            li.innerHTML = `
+                                <div class="flex-grow ${dueClass}">
+                                    <span>${inst.name}</span>
+                                    <span class="text-gray-500 text-xs">(هر ماه ${inst.day}م)</span>
+                                </div>
+                                <span class="font-semibold w-28 text-left ${dueClass}">${formatCurrency(inst.amount)}</span>
+                                <button class="delete-installment-btn text-red-400 hover:text-red-600 mr-2 text-xs" data-id="${inst.id}">حذف</button>
+                            `;
+                            installmentsList.appendChild(li);
                         });
-                    });
+
+                        document.querySelectorAll('.delete-installment-btn').forEach(button => {
+                            button.addEventListener('click', (e) => {
+                                const idToDelete = parseInt(e.target.dataset.id, 10);
+                                if (confirm('آیا از حذف این قسط مطمئن هستید؟')) {
+                                    installments = installments.filter(inst => inst.id !== idToDelete);
+                                    saveAndRenderInstallments();
+                                }
+                            });
+                        });
+                    }
+                    updateInstallmentSummary();
                 }
 
                 function saveAndRenderInstallments() {
@@ -529,7 +549,7 @@
                 const updateChart = () => {
                     const dates = [];
                     const netProfits = [];
-                    for (let i = 6; i >= 0; i--) {
+                    for (let i = 13; i >= 0; i--) { // Changed to 13 for 14 days
                         const d = new Date();
                         d.setDate(d.getDate() - i);
                         const dateStr = d.toISOString().split('T')[0];
@@ -678,6 +698,11 @@
                     const totalExpense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
                     const netProfit = totalIncome - totalExpense;
 
+                    const dates = transactions.map(t => new Date(t.date));
+                    const firstDate = new Date(Math.min.apply(null, dates));
+                    const lastDate = new Date(Math.max.apply(null, dates));
+                    const reportDateRange = transactions.length > 0 ? `${formatPersianDate(firstDate)} - ${formatPersianDate(lastDate)}` : 'N/A';
+
                     // Expense by category for pie chart
                     const expenseByCategory = transactions
                         .filter(t => t.type === 'expense')
@@ -712,67 +737,71 @@
                             <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
                             <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
                             <style>
-                                body { font-family: 'Vazirmatn', sans-serif; background-color: #f9fafb; }
+                                body { font-family: 'Vazirmatn', sans-serif; background-color: #f3f4f6; }
                                 .card { background-color: white; border-radius: 0.75rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); padding: 1.5rem; }
                                 .income { color: #16a34a; }
                                 .expense { color: #dc2626; }
                             </style>
                         </head>
                         <body class="p-4 md:p-8">
-                            <div class="max-w-4xl mx-auto">
-                                <header class="text-center mb-8">
-                                    <h1 class="text-3xl font-bold text-gray-800">گزارش مالی</h1>
+                            <div class="max-w-5xl mx-auto space-y-8">
+                                <header class="text-center">
+                                    <h1 class="text-4xl font-bold text-gray-800">گزارش جامع مالی</h1>
                                     <p class="text-gray-500 mt-2">تاریخ گزارش: ${new Date().toLocaleDateString('fa-IR')}</p>
+                                    <p class="text-gray-500">بازه زمانی تراکنش‌ها: ${reportDateRange}</p>
                                 </header>
 
                                 <!-- Summary Cards -->
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div class="card text-center">
-                                        <h3 class="text-gray-500 font-semibold">کل درآمد</h3>
-                                        <p class="text-2xl font-bold income mt-2">${formatCurrency(totalIncome)}</p>
+                                        <h3 class="text-gray-500 font-semibold text-lg">کل درآمد</h3>
+                                        <p class="text-3xl font-bold income mt-2">${formatCurrency(totalIncome)}</p>
                                     </div>
                                     <div class="card text-center">
-                                        <h3 class="text-gray-500 font-semibold">کل هزینه</h3>
-                                        <p class="text-2xl font-bold expense mt-2">${formatCurrency(totalExpense)}</p>
+                                        <h3 class="text-gray-500 font-semibold text-lg">کل هزینه</h3>
+                                        <p class="text-3xl font-bold expense mt-2">${formatCurrency(totalExpense)}</p>
                                     </div>
                                     <div class="card text-center">
-                                        <h3 class="text-gray-500 font-semibold">سود/زیان خالص</h3>
-                                        <p class="text-2xl font-bold ${netProfit >= 0 ? 'income' : 'expense'} mt-2">${formatCurrency(netProfit)}</p>
+                                        <h3 class="text-gray-500 font-semibold text-lg">سود/زیان خالص</h3>
+                                        <p class="text-3xl font-bold ${netProfit >= 0 ? 'income' : 'expense'} mt-2">${formatCurrency(netProfit)}</p>
                                     </div>
                                 </div>
 
                                 <!-- Charts -->
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                                    <div class="card">
-                                        <h2 class="text-xl font-bold mb-4 text-center">درآمد و هزینه (۳۰ روز گذشته)</h2>
-                                        <canvas id="barChart"></canvas>
-                                    </div>
-                                    <div class="card">
-                                        <h2 class="text-xl font-bold mb-4 text-center">دسته‌بندی هزینه‌ها</h2>
-                                        <canvas id="pieChart" style="max-height: 300px; margin: auto;"></canvas>
+                                <div class="card">
+                                    <h2 class="text-xl font-bold mb-4 text-center">تحلیل گرافیکی</h2>
+                                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-center">
+                                        <div class="lg:col-span-3">
+                                            <h3 class="font-semibold text-center mb-2 text-gray-700">درآمد و هزینه (۳۰ روز گذشته)</h3>
+                                            <canvas id="barChart"></canvas>
+                                        </div>
+                                        <div class="lg:col-span-2">
+                                            <h3 class="font-semibold text-center mb-2 text-gray-700">دسته‌بندی هزینه‌ها</h3>
+                                            <canvas id="pieChart" style="max-height: 300px; margin: auto;"></canvas>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <!-- Transactions Table -->
                                 <div class="card">
-                                    <h2 class="text-xl font-bold mb-4">لیست کامل تراکنش‌ها</h2>
+                                    <h2 class="text-2xl font-bold mb-4">لیست کامل تراکنش‌ها</h2>
                                     <div class="overflow-x-auto">
-                                        <table class="w-full text-sm text-left text-gray-500">
+                                        <table class="w-full text-sm text-right text-gray-500">
                                             <thead class="text-xs text-gray-700 uppercase bg-gray-50">
                                                 <tr>
                                                     <th scope="col" class="px-6 py-3">تاریخ</th>
                                                     <th scope="col" class="px-6 py-3">نوع</th>
                                                     <th scope="col" class="px-6 py-3">دسته/شرح</th>
-                                                    <th scope="col" class="px-6 py-3 text-right">مبلغ</th>
+                                                    <th scope="col" class="px-6 py-3">مبلغ</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 ${transactions.sort((a, b) => new Date(b.date) - new Date(a.date)).map(t => `
-                                                    <tr class="bg-white border-b">
+                                                    <tr class="bg-white border-b hover:bg-gray-50">
                                                         <td class="px-6 py-4">${new Date(t.date).toLocaleDateString('fa-IR')}</td>
-                                                        <td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs ${t.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${t.type === 'income' ? 'درآمد' : 'هزینه'}</span></td>
+                                                        <td class="px-6 py-4"><span class="px-2 py-1 rounded-full text-xs font-semibold ${t.type === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${t.type === 'income' ? 'درآمد' : 'هزینه'}</span></td>
                                                         <td class="px-6 py-4 font-medium text-gray-900">${t.description || t.category}</td>
-                                                        <td class="px-6 py-4 text-right font-semibold ${t.type === 'income' ? 'income' : 'expense'}">${formatCurrency(t.amount)}</td>
+                                                        <td class="px-6 py-4 font-semibold ${t.type === 'income' ? 'income' : 'expense'}">${formatCurrency(t.amount)}</td>
                                                     </tr>
                                                 `).join('')}
                                             </tbody>
@@ -794,7 +823,7 @@
                                             { label: 'هزینه', data: Object.values(${JSON.stringify(dailyData)}).map(d => d.expense), backgroundColor: 'rgba(239, 68, 68, 0.7)', borderRadius: 4 }
                                         ]
                                     },
-                                    options: { responsive: true, scales: { y: { ticks: { callback: (v) => formatCurrencyJS(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => formatCurrencyJS(c.raw) + ' تومان' } } } }
+                                    options: { responsive: true, scales: { y: { ticks: { callback: (v) => formatCurrencyJS(v) } } }, plugins: { tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + formatCurrencyJS(c.raw) + ' تومان' } } } }
                                 });
 
                                 // Pie Chart
@@ -804,7 +833,8 @@
                                         labels: ${JSON.stringify(Object.keys(expenseByCategory))},
                                         datasets: [{
                                             data: ${JSON.stringify(Object.values(expenseByCategory))},
-                                            backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6']
+                                            backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#06b6d4', '#3b82f6'],
+                                            hoverOffset: 4
                                         }]
                                     },
                                     options: { responsive: true, plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: (c) => c.label + ': ' + formatCurrencyJS(c.raw) + ' تومان' } } } }
@@ -889,3 +919,4 @@
     </script>
 </body>
 </html>
+
